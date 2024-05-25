@@ -4,40 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import periodogram
 from statsmodels.tsa.deterministic import DeterministicProcess
-from sklearn.linear_model import LinearRegression
+import matplotlib.gridspec as gridspec
 
-def plot_periodogram(ts, detrend='linear', ax=None):
-    from scipy.signal import periodogram
-    fs = pd.Timedelta("365D") / pd.Timedelta("1D")
-    freqencies, spectrum = periodogram(
-        ts,
-        fs=fs,
-        detrend=detrend,
-        window="boxcar",
-        scaling='spectrum',
-    )
-    if ax is None:
-        _, ax = plt.subplots()
-    ax.step(freqencies, spectrum, color="purple")
-    ax.set_xscale("log")
-    ax.set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
-    ax.set_xticklabels(
-        [
-            "Annual (1)",
-            "Semiannual (2)",
-            "Quarterly (4)",
-            "Bimonthly (6)",
-            "Monthly (12)",
-            "Biweekly (26)",
-            "Weekly (52)",
-            "Semiweekly (104)",
-        ],
-        rotation=30,
-    )
-    ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    ax.set_ylabel("Variance")
-    ax.set_title("Periodogram")
-    return ax
+from sklearn.linear_model import LinearRegression
 
 # Classe para Análise Exploratória dos Dados
 class EDA:
@@ -54,11 +23,15 @@ class EDA:
             parse_dates=['date'],
             )
 
-    def family_pivot(self):
+    def family_pivot(self, familia = False):
         df = self.dataset.copy()
         df['date'] = pd.to_datetime(df['date'])
         df = df.pivot_table(index='date', columns='family', values='sales', aggfunc='sum', fill_value=0)
         df.reset_index(inplace=True)
+        if familia:
+            if familia not in df.columns:
+                raise ValueError(f"Family '{familia}' not found in the dataset.")
+            df = df[['date', familia]].copy()
         return df
 
     def initial_exploitation(self):
@@ -87,121 +60,74 @@ class EDA:
         ax[2].set_frame_on(False)
         plt.show()
 
-    def data_description(self):
-        df = self.family_pivot()
-        print(df.select_dtypes(include=['number']).describe())
-        colunas = df.select_dtypes(include=['number']).columns.tolist()
-        # Número de colunas por figura
-        familias_por_fig = 3  # Reduzido para melhorar a visualização
-        # Número de figuras necessárias
-        num_figs = (len(colunas) + familias_por_fig - 1) // familias_por_fig
-        for fig_idx in range(num_figs):
-            fig, axs = plt.subplots(nrows=familias_por_fig, ncols=2, figsize=(15, familias_por_fig * 5))
-            for i in range(familias_por_fig):
-                col_idx = fig_idx * familias_por_fig + i
-                if col_idx >= len(colunas):
-                    break
-                coluna = colunas[col_idx]
-                # Boxplot
-                df[coluna].plot(kind='box', ax=axs[i, 0])
-                axs[i, 0].set_title(f'Boxplot de {coluna}')
-                axs[i, 0].set_xlabel('')
-                axs[i, 0].set_ylabel('')
-                # Histograma
-                axs[i, 1].hist(df[coluna], bins=10, density=True, alpha=0.7)
-                axs[i, 1].set_title(f'Histograma de {coluna}')
-                axs[i, 1].set_xlabel('')
-                axs[i, 1].set_ylabel('')
-            fig.tight_layout(pad=3.0)
-        # Mostrar todas as figuras
-        plt.show()
-    
-    def plot_sales_by_family(self):
-        df = self.family_pivot()
-        familias_por_fig=3
-        colunas = df.select_dtypes(include=['number']).columns.tolist()
-        # Número de figuras necessárias
-        num_figs = (len(colunas) + familias_por_fig - 1) // familias_por_fig
-        for fig_idx in range(num_figs):
-            fig, axs = plt.subplots(nrows=familias_por_fig, ncols=1, figsize=(15, familias_por_fig * 5))
-            for i in range(familias_por_fig):
-                col_idx = fig_idx * familias_por_fig + i
-                if col_idx >= len(colunas):
-                    break
-                coluna = colunas[col_idx]
-                trend365 =  df[coluna].rolling(
+
+    def family_analysis(self, familia):
+        df = self.family_pivot(familia = familia)
+        fig = plt.figure(figsize=(10, 8))
+        gs = gridspec.GridSpec(3, 2, height_ratios=[1, 1, 1])
+        # Plot sales and trend
+        ax0 = fig.add_subplot(gs[0, :])
+        trend365 =  df[familia].rolling(
                         window=365,
                         center=True,
                         min_periods=183,
                     ).mean()
-                trend30 =  df[coluna].rolling(
+        trend30 =  df[familia].rolling(
                         window=30,
                         center=True,
                         min_periods=15,
                     ).mean()
-                # Gráfico de linha para vendas
-                axs[i].plot(df['date'], df[coluna], marker='.', markerfacecolor='white', markeredgewidth=1, 
-                            linestyle='-', color='0.25', label='Vendas', linewidth=1, markersize=4)
-                # Gráfico de linha para tendência
-                axs[i].plot(df['date'], trend365, color='blue', label='Média móvel (365 dias)')
-                axs[i].plot(df['date'], trend30, color='red', label='Média móvel (30 dias)')
-                axs[i].set_title(f'{coluna}')
-                axs[i].set_xlabel('date')
-                axs[i].set_ylabel(coluna)
-                axs[i].legend()
-            fig.tight_layout(pad=3.0)
-        # Mostrar todas as figuras
+        ax0.plot(df['date'], df[familia], marker='.', linestyle='-', color='0.25', label='vendas', linewidth=1, markersize=4)
+        ax0.plot(df['date'], trend365, color='blue', label='média móvel (365 dias)')
+        ax0.plot(df['date'], trend30, color='red', label='média móvel (30 dias)')
+        ax0.set_title(f'Vendas e tendências para {familia}')
+        ax0.set_xlabel('Date')
+        ax0.set_ylabel(familia)
+        ax0.legend()
+        # Boxplot and Histogram
+        ax1 = fig.add_subplot(gs[1, 0])
+        df[familia].plot(kind='box', ax=ax1)
+        ax1.set_title(f'Boxplot de {familia}')
+        ax1.set_xlabel('')
+        ax2 = fig.add_subplot(gs[1, 1])
+        ax2.hist(df[familia], bins=10, density=True, alpha=0.7)
+        ax2.set_title(f'Histograma de {familia}')
+        ax2.set_xlabel(familia)
+        ax2.set_ylabel('Density')
+        # fig_box_hist.tight_layout()
+        # Periodogram
+        f, Pxx = periodogram(
+            df[familia],
+            fs=pd.Timedelta("365D") / pd.Timedelta("1D"),
+            detrend='linear',
+            window="boxcar",
+            scaling='spectrum',
+        )
+        ax3 = fig.add_subplot(gs[2, :])
+        ax3.step(f, Pxx, color="purple")
+        ax3.set_xscale("log")
+        ax3.set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
+        ax3.set_xticklabels(
+            [
+                "Annual (1)",
+                "Semiannual (2)",
+                "Quarterly (4)",
+                "Bimonthly (6)",
+                "Monthly (12)",
+                "Biweekly (26)",
+                "Weekly (52)",
+                "Semiweekly (104)",
+            ],
+            rotation=30,
+        )
+        ax3.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+        ax3.set_ylabel("Variance")
+        ax3.set_title(f'Periodograma de {familia}')
+        plt.tight_layout()
         plt.show()
 
-    def plot_periodogram_by_family(self):
+    def all_families_analysis(self):
         df = self.family_pivot()
-        familias_por_fig=6
-        colunas = df.select_dtypes(include=['number']).columns.tolist()
-        # Número de figuras necessárias
-        num_figs = (len(colunas) + familias_por_fig - 1) // familias_por_fig
-        for fig_idx in range(num_figs):
-            fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(15, 10))
-            for i in range(3):
-                for j in range(2):
-                    fam_idx = fig_idx * 6 + i * 2 + j
-                    if fam_idx >= len(colunas):
-                        break
-                    coluna = colunas[fam_idx]
-                    # Calcular o periodograma
-                    f, Pxx = periodogram(
-                        df[coluna],
-                        fs=pd.Timedelta("365D") / pd.Timedelta("1D"),
-                        detrend='linear',
-                        window="boxcar",
-                        scaling='spectrum',
-                    )
-                    # Plotar o periodograma
-                    axs[i, j].step(f, Pxx, color="purple")
-                    axs[i, j].set_xscale("log")
-                    axs[i, j].set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
-                    axs[i, j].set_xticklabels(
-                        [
-                            "Annual (1)",
-                            "Semiannual (2)",
-                            "Quarterly (4)",
-                            "Bimonthly (6)",
-                            "Monthly (12)",
-                            "Biweekly (26)",
-                            "Weekly (52)",
-                            "Semiweekly (104)",
-                        ],
-                        rotation=30,
-                    )
-                    axs[i, j].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-                    axs[i, j].set_ylabel("Variance")
-                    axs[i, j].set_title(f'Periodograma de {coluna}')
-            fig.tight_layout(pad=3.0)
-        # Mostrar a figura atual
-        plt.show()
-
-
-    
-
-
-
-        
+        familias = df.select_dtypes(include=['number']).columns.tolist()
+        for familia in familias:
+            self.family_analysis(familia)
