@@ -11,7 +11,7 @@ from sklearn.linear_model import LinearRegression
 
 # Classe para Análise Exploratória dos Dados
 class EDA:
-    def __init__(self, name):
+    def __init__(self, name, initial=False):
         self.dataset = pd.read_csv(
             name,
             usecols=['store_nbr', 'family', 'date', 'sales', 'onpromotion'],
@@ -23,18 +23,15 @@ class EDA:
             },
             parse_dates=['date'],
             )
+        self.dataset['date'] = pd.to_datetime(self.dataset['date'])
+        if initial:
+            self.dataset = self.dataset[self.dataset['date'] >= initial]
+        
         
 
     def family_pivot(self, familia = False):
         df = self.dataset.copy()
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.pivot_table(
-            index='date',
-            columns='family',
-            values='sales',
-            aggfunc='sum',
-            fill_value=0
-            )
+        df = df.pivot_table(index='date', columns='family', values='sales', aggfunc='sum', fill_value=0)
         df.reset_index(inplace=True)
         if familia:
             if familia not in df.columns:
@@ -69,6 +66,36 @@ class EDA:
         plt.tight_layout()
         plt.show()
 
+    def plot_periodogram(self, y, familia, ax):
+        # Periodograma
+        f, Pxx = periodogram(
+            y,
+            fs=pd.Timedelta("365D") / pd.Timedelta("1D"),
+            detrend='linear',
+            window="boxcar",
+            scaling='spectrum',
+        )
+        
+        ax.step(f, Pxx, color="purple")
+        ax.set_xscale("log")
+        ax.set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
+        ax.set_xticklabels(
+            [
+                "Annual (1)",
+                "Semiannual (2)",
+                "Quarterly (4)",
+                "Bimonthly (6)",
+                "Monthly (12)",
+                "Biweekly (26)",
+                "Weekly (52)",
+                "Semiweekly (104)",
+            ],
+            rotation=30,
+        )
+        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+        ax.set_ylabel("Variance")
+        ax.set_title(f'Periodograma de {familia}')
+        return ax
 
     def family_analysis(self, familia):
         df = self.family_pivot(familia = familia)
@@ -104,33 +131,8 @@ class EDA:
         ax2.set_xlabel(familia)
         ax2.set_ylabel('Density')
         # Periodograma
-        f, Pxx = periodogram(
-            df[familia],
-            fs=pd.Timedelta("365D") / pd.Timedelta("1D"),
-            detrend='linear',
-            window="boxcar",
-            scaling='spectrum',
-        )
         ax3 = fig.add_subplot(gs[2, :])
-        ax3.step(f, Pxx, color="purple")
-        ax3.set_xscale("log")
-        ax3.set_xticks([1, 2, 4, 6, 12, 26, 52, 104])
-        ax3.set_xticklabels(
-            [
-                "Annual (1)",
-                "Semiannual (2)",
-                "Quarterly (4)",
-                "Bimonthly (6)",
-                "Monthly (12)",
-                "Biweekly (26)",
-                "Weekly (52)",
-                "Semiweekly (104)",
-            ],
-            rotation=30,
-        )
-        ax3.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-        ax3.set_ylabel("Variance")
-        ax3.set_title(f'Periodograma de {familia}')
+        ax3 = self.plot_periodogram(df[familia],familia,ax3)
         plt.tight_layout()
         plt.show()
 
@@ -142,9 +144,9 @@ class EDA:
 
     def family_deseason(self, familia, order):
         df = self.family_pivot(familia = familia)
+        df.set_index('date', inplace=True)
         # vendas e sua sazonalidade
         y = df.copy().squeeze()
-        y.set_index('date', inplace=True)
         fourier = CalendarFourier(freq='A', order=order)
         dp = DeterministicProcess(
             index=y.index,
@@ -158,21 +160,36 @@ class EDA:
         X = dp.in_sample()
         model = LinearRegression().fit(X, y)
         y_pred = model.predict(X)
-        print(y_pred)
         y_pred = pd.Series(y_pred.reshape(-1), index=X.index) 
-        fig, ax = plt.subplot(3,1)
-        ax[0].plot(df['date'], y, marker='.', linestyle='-', color='0.25', label='vendas', linewidth=1, markersize=4)
-        ax[0].plot(df['date'], y_pred, label='sazonalidade')
+        fig, ax = plt.subplots(nrows=3, figsize=(16, 8))
+        ax[0].plot(y.index, y, marker='.', linestyle='-', color='0.25', label='vendas', linewidth=1, markersize=4)
+        ax[0].plot(y.index, y_pred, label='sazonalidade')
+        ax[0].set_title(f'Vendas e sazonalidade para {familia}')
+        ax[0].set_ylabel('vendas')
         ax[0].legend()
-
-
+        # periodorama sazonal
+        ax[1] = self.plot_periodogram(y, familia, ax[1])
+        ax[1].set_title(f'Periodograma de {familia} sazonal')
+        y_lim = ax[1].get_ylim()
+        # periodorama dessazonalizado
+        y_dessaz = y.values.reshape(-1) - y_pred.values
+        ax[2] = self.plot_periodogram(y_dessaz, familia, ax[2])
+        ax[2].set_title(f'Periodograma de {familia} dessazonalizado')
+        ax[2].set_ylim(top=y_lim[1])
+        plt.tight_layout()
         plt.show()
 
+    def all_families_deseason(self):
+        df = self.family_pivot()
+        familias = df.select_dtypes(include=['number']).columns.tolist()
+        for familia in familias:
+            self.family_deseason(familia, order = 12)
+
 if __name__ == '__main__':
-    eda = EDA('train.csv')
-    familia = 'AUTOMOTIVE'
-    # eda.family_analysis(familia)
-    eda.family_deseason(familia, order = 4)
+    eda = EDA('train.csv', initial='2016-08-15')
+    familia = 'CELEBRATION'
+    eda.family_analysis(familia)
+    eda.family_deseason(familia, order = 12)
 
 
 
