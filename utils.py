@@ -3,8 +3,9 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import periodogram
-from statsmodels.tsa.deterministic import DeterministicProcess
+from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 import matplotlib.gridspec as gridspec
+from pandas.tseries.offsets import DateOffset
 
 from sklearn.linear_model import LinearRegression
 
@@ -22,11 +23,18 @@ class EDA:
             },
             parse_dates=['date'],
             )
+        
 
     def family_pivot(self, familia = False):
         df = self.dataset.copy()
         df['date'] = pd.to_datetime(df['date'])
-        df = df.pivot_table(index='date', columns='family', values='sales', aggfunc='sum', fill_value=0)
+        df = df.pivot_table(
+            index='date',
+            columns='family',
+            values='sales',
+            aggfunc='sum',
+            fill_value=0
+            )
         df.reset_index(inplace=True)
         if familia:
             if familia not in df.columns:
@@ -35,7 +43,7 @@ class EDA:
         return df
 
     def initial_exploitation(self):
-        fig, ax = plt.subplots(3,1)
+        fig, ax = plt.subplots(nrows=3, ncols=1,figsize=(16, 8))
         df = [self.dataset.head(),self.dataset.tail()]
         for i in range(2):
             ax[i].xaxis.set_visible(False)
@@ -58,6 +66,7 @@ class EDA:
         ax[2].xaxis.set_visible(False)
         ax[2].yaxis.set_visible(False)
         ax[2].set_frame_on(False)
+        plt.tight_layout()
         plt.show()
 
 
@@ -65,7 +74,7 @@ class EDA:
         df = self.family_pivot(familia = familia)
         fig = plt.figure(figsize=(10, 8))
         gs = gridspec.GridSpec(3, 2, height_ratios=[1, 1, 1])
-        # Plot sales and trend
+        # Plot sales e trend
         ax0 = fig.add_subplot(gs[0, :])
         trend365 =  df[familia].rolling(
                         window=365,
@@ -84,7 +93,7 @@ class EDA:
         ax0.set_xlabel('Date')
         ax0.set_ylabel(familia)
         ax0.legend()
-        # Boxplot and Histogram
+        # Boxplot e Histograma
         ax1 = fig.add_subplot(gs[1, 0])
         df[familia].plot(kind='box', ax=ax1)
         ax1.set_title(f'Boxplot de {familia}')
@@ -94,8 +103,7 @@ class EDA:
         ax2.set_title(f'Histograma de {familia}')
         ax2.set_xlabel(familia)
         ax2.set_ylabel('Density')
-        # fig_box_hist.tight_layout()
-        # Periodogram
+        # Periodograma
         f, Pxx = periodogram(
             df[familia],
             fs=pd.Timedelta("365D") / pd.Timedelta("1D"),
@@ -131,3 +139,41 @@ class EDA:
         familias = df.select_dtypes(include=['number']).columns.tolist()
         for familia in familias:
             self.family_analysis(familia)
+
+    def family_deseason(self, familia, order):
+        df = self.family_pivot(familia = familia)
+        # vendas e sua sazonalidade
+        y = df.copy().squeeze()
+        y.set_index('date', inplace=True)
+        fourier = CalendarFourier(freq='A', order=order)
+        dp = DeterministicProcess(
+            index=y.index,
+            constant=True,
+            order=1,
+            seasonal=True,
+            additional_terms=[fourier],
+            drop=True,
+            period=365,
+        )
+        X = dp.in_sample()
+        model = LinearRegression().fit(X, y)
+        y_pred = model.predict(X)
+        print(y_pred)
+        y_pred = pd.Series(y_pred.reshape(-1), index=X.index) 
+        fig, ax = plt.subplot(3,1)
+        ax[0].plot(df['date'], y, marker='.', linestyle='-', color='0.25', label='vendas', linewidth=1, markersize=4)
+        ax[0].plot(df['date'], y_pred, label='sazonalidade')
+        ax[0].legend()
+
+
+        plt.show()
+
+if __name__ == '__main__':
+    eda = EDA('train.csv')
+    familia = 'AUTOMOTIVE'
+    # eda.family_analysis(familia)
+    eda.family_deseason(familia, order = 4)
+
+
+
+
