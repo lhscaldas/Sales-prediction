@@ -170,12 +170,13 @@ class EDA:
         # periodorama sazonal
         ax[1] = self.plot_periodogram(y, familia, ax[1])
         ax[1].set_title(f'Periodograma de {familia} sazonal')
-        y_lim = ax[1].get_ylim()
         # periodorama dessazonalizado
         y_dessaz = y.values.reshape(-1) - y_pred.values
         ax[2] = self.plot_periodogram(y_dessaz, familia, ax[2])
         ax[2].set_title(f'Periodograma de {familia} dessazonalizado')
-        ax[2].set_ylim(top=y_lim[1])
+        y_lim = ax[2].get_ylim()
+        if y_lim[1]<1:
+            ax[2].set_ylim(top=1e0)
         plt.tight_layout()
         plt.show()
 
@@ -183,12 +184,12 @@ class EDA:
         df = self.family_pivot()
         familias = df.select_dtypes(include=['number']).columns.tolist()
         for familia in familias:
-            self.family_deseason(familia, order = 12)
+            self.family_deseason(familia, order = 6)
 
 if __name__ == '__main__':
     eda = EDA('train.csv', initial='2016-08-15')
     familia = 'CELEBRATION'
-    eda.family_analysis(familia)
+    # eda.family_analysis(familia)
     eda.family_deseason(familia, order = 12)
 
 
