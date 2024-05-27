@@ -6,6 +6,8 @@ from scipy.signal import periodogram
 from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 import matplotlib.gridspec as gridspec
 from pandas.tseries.offsets import DateOffset
+from statsmodels.graphics.tsaplots import plot_acf
+from statsmodels.tsa.stattools import acf
 
 from sklearn.linear_model import LinearRegression
 
@@ -142,11 +144,14 @@ class EDA:
         for familia in familias:
             self.family_analysis(familia)
 
-    def family_deseason(self, familia, order):
+    def calc_deseason(self, familia, order):
         df = self.family_pivot(familia = familia)
         df.set_index('date', inplace=True)
+        df = df.asfreq('D')
+        df = df.fillna(df.rolling(3, min_periods=1).mean().shift(-1))
         # vendas e sua sazonalidade
         y = df.copy().squeeze()
+        y.dropna(inplace=True)
         fourier = CalendarFourier(freq='A', order=order)
         dp = DeterministicProcess(
             index=y.index,
@@ -155,15 +160,19 @@ class EDA:
             seasonal=True,
             additional_terms=[fourier],
             drop=True,
-            period=365,
         )
         X = dp.in_sample()
         model = LinearRegression().fit(X, y)
-        y_pred = model.predict(X)
-        y_pred = pd.Series(y_pred.reshape(-1), index=X.index) 
+        y_pred = pd.Series(model.predict(X), index=X.index)
+        y_dessaz = pd.Series(y.values - y_pred.values, index=X.index)
+        return y, y_pred, y_dessaz
+
+    def family_deseason(self, familia, order):
+        y, y_pred, y_dessaz = self.calc_deseason(familia, order)
         fig, ax = plt.subplots(nrows=3, figsize=(16, 8))
         ax[0].plot(y.index, y, marker='.', linestyle='-', color='0.25', label='vendas', linewidth=1, markersize=4)
         ax[0].plot(y.index, y_pred, label='sazonalidade')
+        ax[0].plot(y.index, y_dessaz, label='dessazonalizado')
         ax[0].set_title(f'Vendas e sazonalidade para {familia}')
         ax[0].set_ylabel('vendas')
         ax[0].legend()
@@ -171,12 +180,10 @@ class EDA:
         ax[1] = self.plot_periodogram(y, familia, ax[1])
         ax[1].set_title(f'Periodograma de {familia} sazonal')
         # periodorama dessazonalizado
-        y_dessaz = y.values.reshape(-1) - y_pred.values
         ax[2] = self.plot_periodogram(y_dessaz, familia, ax[2])
         ax[2].set_title(f'Periodograma de {familia} dessazonalizado')
-        y_lim = ax[2].get_ylim()
-        if y_lim[1]<1:
-            ax[2].set_ylim(top=1e0)
+        y_lim = ax[1].get_ylim()
+        ax[2].set_ylim(top=y_lim[1])
         plt.tight_layout()
         plt.show()
 
@@ -184,13 +191,48 @@ class EDA:
         df = self.family_pivot()
         familias = df.select_dtypes(include=['number']).columns.tolist()
         for familia in familias:
-            self.family_deseason(familia, order = 6)
+            self.family_deseason(familia, order = 40)
+
+    def family_lag(self, familia, order, max_lag=8):
+        _, _, y_dessaz = self.calc_deseason(familia, order)
+        df = y_dessaz.to_frame(name='sales')
+        # Gerando as colunas de lag
+        for lag in range(1, max_lag + 1):
+            df[f'lag_{lag}'] = df['sales'].shift(lag)
+        
+        # Plotando os gráficos de dispersão
+        plt.figure(figsize=(15, 15))
+        for lag in range(1, max_lag + 1):
+            correlation = df['sales'].corr(df[f'lag_{lag}'])
+            plt.subplot(3, 4, lag)
+            sns.scatterplot(x=f'lag_{lag}', y='sales', data=df)
+            plt.title(f'Lag {lag} vs Vendas de {familia}')
+            plt.xlabel(f'Lag {lag}')
+            plt.ylabel('Vendas')
+            plt.text(0.05, 0.95, f'r: {correlation:.2f}', transform=plt.gca().transAxes, fontsize=12, verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', edgecolor='black', facecolor='white'))
+
+        ax = plt.subplot(3, 1, 3)
+        plot_acf(df['sales'], lags=max_lag, ax=plt.gca())
+        acf_values = acf(df['sales'], nlags=max_lag)
+        delta = 0.025
+        ax.set_ylim(top=max(acf_values+delta), bottom=min(acf_values-delta))
+        plt.title('Autocorrelation')
+        plt.xlabel('Lag')
+        plt.ylabel('Autocorrelation')
+        
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=0.25)
+        plt.show()
+
 
 if __name__ == '__main__':
     eda = EDA('train.csv', initial='2016-08-15')
-    familia = 'CELEBRATION'
+    # eda = EDA('train.csv')
+    familia = 'SCHOOL AND OFFICE SUPPLIES'
     # eda.family_analysis(familia)
-    eda.family_deseason(familia, order = 12)
+    order = 4
+    eda.family_deseason(familia, order = 4)
+    eda.family_lag(familia, order = 8)
 
 
 
