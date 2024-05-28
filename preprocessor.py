@@ -8,7 +8,7 @@ from statsmodels.graphics.tsaplots import plot_pacf
 from statsmodels.tsa.stattools import pacf
 from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 
-from sklearn.linear_model import LinearRegression
+
 from sklearn.preprocessing import LabelEncoder
 
 from eda import EDA
@@ -46,6 +46,7 @@ class Preprocessor():
     def import_test(self):
         self.test = pd.read_csv(
             'test.csv',
+            usecols=['store_nbr', 'family', 'date', 'onpromotion'],
             dtype={
                 'store_nbr': 'category',
                 'family': 'category',
@@ -103,10 +104,8 @@ class Preprocessor():
         self.fill_christmas()
         self.find_zeros()
 
-    def generate_training_data(self, START, END):
-        y = self.dataset.loc[START:END]
-        # X_1: Features for Linear Regression
-        fourier = CalendarFourier(freq='M', order=4)
+    def fourier(self, y):
+        fourier = CalendarFourier(freq='ME', order=4)
         dp = DeterministicProcess(
             index=y.index,
             constant=True,
@@ -115,6 +114,12 @@ class Preprocessor():
             additional_terms=[fourier],
             drop=True,
         )
+        return dp
+
+    def generate_training_data(self, START, END):
+        y = self.dataset.loc[START:END]
+        # X_1: Features for Linear Regression
+        dp = self.fourier(y)
         X_1 = dp.in_sample()
         X_1['NewYear'] = (X_1.index.dayofyear == 1)
         # X_2: Features for XGBoost
@@ -127,13 +132,28 @@ class Preprocessor():
         y_train, y_valid = y[:"2017-07-01"], y["2017-07-02":]
         X1_train, X1_valid = X_1[: "2017-07-01"], X_1["2017-07-02" :]
         X2_train, X2_valid = X_2.loc[:"2017-07-01"], X_2.loc["2017-07-02":]
-        return  y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid
-        
+        return  y, y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid
+    
+    def generate_test_data(self, START, END):
+        y = self.dataset.loc[START:END]
+        # X_1: Features for Linear Regression
+        dp = self.fourier(y)
+        X_1 = dp.out_of_sample(steps=16)
+        X_1['NewYear'] = (X_1.index.dayofyear == 1)
+        # X_2: Features for XGBoost
+        X_2 = self.test.drop(['store_nbr', 'item'], axis=1).loc[START:END]  # sobra apenas onpromotion
+        le = LabelEncoder()
+        le.fit(X_2.family)
+        X_2['family'] = le.transform(X_2['family'])
+        X_2["day"] = X_2.index.day 
+        X_2 = X_2.join(self.holidays_test, on='date').fillna(0.0)
+        return  X_1, X_2
 
-if __name__ == '__main__':
-    preprocessor = Preprocessor()
-    preprocessor.generate_dataset()
-    y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid = preprocessor.generate_training_data('2017','2017')
-    print(y_train.head())
+
+# if __name__ == '__main__':
+#     preprocessor = Preprocessor()
+#     preprocessor.generate_dataset()
+#     y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid = preprocessor.generate_training_data('2017','2017')
+#     print(y_train.head())
     
 
