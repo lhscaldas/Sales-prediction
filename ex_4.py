@@ -60,5 +60,17 @@ ax = y_deseason.plot(ax = ax)
 ax.set_title("Sales of School and Office Supplies (deseasonalized)")
 plt.show()
 
+y_ma = y.rolling(7, center=True).mean()
+ax = y_ma.plot()
+ax.set_title("Seven-Day Moving Average")
+plt.show()
+
+plot_pacf(y_deseason, lags=8)
+plot_lags(y_deseason, lags=8, nrows=2)
+plt.show()
+
+
+
+
 
 

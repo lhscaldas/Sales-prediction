@@ -2,12 +2,11 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import periodogram
-from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 import matplotlib.gridspec as gridspec
-from pandas.tseries.offsets import DateOffset
-from statsmodels.graphics.tsaplots import plot_acf
-from statsmodels.tsa.stattools import acf
+from scipy.signal import periodogram
+from statsmodels.graphics.tsaplots import plot_pacf
+from statsmodels.tsa.stattools import pacf
+from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 
 from sklearn.linear_model import LinearRegression
 
@@ -159,7 +158,7 @@ class EDA:
             drop=True,
         )
         X = dp.in_sample()
-        model = LinearRegression().fit(X, y)
+        model = LinearRegression(fit_intercept=False).fit(X, y)
         y_pred = pd.Series(model.predict(X), index=X.index)
         y_dessaz = pd.Series(y.values - y_pred.values, index=X.index)
         return y, y_pred, y_dessaz
@@ -214,15 +213,17 @@ class EDA:
             ax.set_title(f'Lag {lag} vs {familia:5}')
             ax.set_xlabel(f'Lag {lag}')
             ax.set_ylabel('Vendas')
+            ax.grid(True)
             ax.text(0.05, 0.95, f'r: {correlation:.2f}', transform=ax.transAxes, fontsize=12,
                     verticalalignment='top', bbox=dict(boxstyle='round,pad=0.3', edgecolor='black', facecolor='white'))
         ax_acf = fig.add_subplot(gs[-1, :])
-        plot_acf(df['sales'], lags=max_lag, ax=ax_acf)
-        acf_values = acf(df['sales'], nlags=max_lag)
-        delta = 0.025
-        ax_acf.set_ylim(top=max(acf_values.any(), 0) + delta, bottom=min(acf_values.any(), 0) - delta)
+        plot_pacf(df['sales'], lags=max_lag, ax=ax_acf)
+        acf_values = pacf(df['sales'], nlags=max_lag)
+        delta = 0.05
+        ax_acf.set_ylim(top=max(max(acf_values), 0) + delta, bottom=min(min(acf_values), 0) - delta)
         ax_acf.set_xlabel('Lag')
         ax_acf.set_ylabel('Autocorrelation')
+        ax_acf.grid(True)
         plt.show()
 
     def all_families_lag(self, freq, order, max_lag=8):
@@ -232,21 +233,21 @@ class EDA:
             self.family_lag(familia[1], freq, order, max_lag)
 
 
-if __name__ == '__main__':
+
+# if __name__ == '__main__':
     # eda = EDA('train.csv')
     # eda.initial_exploitation()
     # eda.all_families_analysis()
 
-    eda = EDA('train.csv', initial = '2016-08-15')
+    # eda = EDA('train.csv', initial = '2016-08-15')
     # eda.all_families_deseason('A', 26)
     # eda.all_families_lag(freq='M', order=4, max_lag=8)
 
     # familia = 'SCHOOL AND OFFICE SUPPLIES'
-    # eda = EDA('train.csv', initial = '2016-08-15')
+    # eda = EDA('train.csv', initial = '2017-01-01')
     # eda.family_analysis(familia)
-    # eda.family_deseason(familia, freq='A', order = 12)
+    # eda.family_deseason(familia, freq='M', order = 4)
     # eda.family_lag(familia, freq='M', order=4, max_lag=8)
-
 
 
 
