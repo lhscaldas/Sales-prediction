@@ -18,17 +18,13 @@ class BoostedHybrid:
 
     def fit(self, X_1, X_2, y):
         self.model_1.fit(X_1, y)
-
         y_fit = pd.DataFrame(
             self.model_1.predict(X_1), 
             index=X_1.index, columns=y.columns,
         )
-
         y_resid = y - y_fit
         y_resid = y_resid.stack().squeeze()
-
         self.model_2.fit(X_2, y_resid)
-
         self.y_columns = y.columns
         self.y_fit = y_fit
         self.y_resid = y_resid
@@ -45,7 +41,6 @@ class BoostedHybrid:
     def validation_results(self, y, y_train, y_valid, y_fit, y_pred):
         y_fit = y_fit.clip(0.0)
         y_pred = y_pred.clip(0.0)
-
         families = y.columns[0:6]
         axs = y.loc(axis=1)[families].plot(
             subplots=True, figsize=(11, 9), marker='.', linestyle='-',
@@ -55,13 +50,10 @@ class BoostedHybrid:
         for ax, family in zip(axs, families):
             ax.legend([])
             ax.set_ylabel(family)
-
-        
         error_train = mean_squared_log_error(y_train, y_fit)
         error_valid = mean_squared_log_error(y_valid, y_pred)
         print(f"erro de treinamento: {error_train}")
         print(f"erro de validação: {error_valid}")
-        
         plt.show()
         
     def generate_csv(self, y_test):
@@ -77,7 +69,6 @@ class BoostedHybrid:
             .dropna()
             .drop(['item'], axis=1)
         )
-
         output = pd.read_csv(
                     'test.csv',
                     usecols=['id','store_nbr', 'family', 'date', 'onpromotion'],
@@ -93,21 +84,20 @@ class BoostedHybrid:
         output = output.drop(['date', 'store_nbr', 'family','onpromotion'], axis=1)
         output.to_csv('submission.csv',index=False)
     
-if __name__ == '__main__':
-    preprocessor = Preprocessor()
-    preprocessor.generate_dataset()
-    y, y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid = preprocessor.generate_training_data('2017','2017')
+# if __name__ == '__main__':
+#     preprocessor = Preprocessor()
+#     preprocessor.generate_dataset()
+#     y, y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid = preprocessor.generate_training_data('2017','2017')
 
-
-    model = BoostedHybrid()
-    model.fit(X1_train, X2_train, y_train)
-    y_fit = model.predict(X1_train, X2_train)
-    y_pred = model.predict(X1_valid, X2_valid)
-    model.validation_results(y, y_train, y_valid, y_fit, y_pred)
+#     model = BoostedHybrid()
+#     model.fit(X1_train, X2_train, y_train)
+#     y_fit = model.predict(X1_train, X2_train)
+#     y_pred = model.predict(X1_valid, X2_valid)
+#     model.validation_results(y, y_train, y_valid, y_fit, y_pred)
     
-    X1_test, X2_test = preprocessor.generate_test_data('2017','2017')
-    y_test = model.predict(X1_test, X2_test)
-    model.generate_csv(y_test)
+#     X1_test, X2_test = preprocessor.generate_test_data('2017','2017')
+#     y_test = model.predict(X1_test, X2_test)
+#     model.generate_csv(y_test)
 
 
     

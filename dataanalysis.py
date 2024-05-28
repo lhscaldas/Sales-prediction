@@ -128,7 +128,7 @@ class EDA:
         ax1.set_title(f'Boxplot de {familia}')
         ax1.set_xlabel('')
         ax2 = fig.add_subplot(gs[1, 1])
-        ax2.hist( df['sales'], bins=10, density=True, alpha=0.7)
+        sns.histplot(data=df, x=('sales', familia), kde=True, bins=10, ax=ax2)
         ax2.set_title(f'Histograma de {familia}')
         ax2.set_xlabel(familia)
         ax2.set_ylabel('Density')
@@ -234,10 +234,10 @@ class EDA:
 
 
 
-# if __name__ == '__main__':
-    # eda = EDA('train.csv')
-    # eda.initial_exploitation()
-    # eda.all_families_analysis()
+# # if __name__ == '__main__':
+#     eda = EDA('train.csv')
+#     eda.initial_exploitation()
+#     eda.all_families_analysis()
 
     # eda = EDA('train.csv', initial = '2016-08-15')
     # eda.all_families_deseason('A', 26)

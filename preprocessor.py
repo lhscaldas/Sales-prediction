@@ -11,8 +11,6 @@ from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
 
 from sklearn.preprocessing import LabelEncoder
 
-from eda import EDA
-
 class Preprocessor():
     def __init__(self):
         # self.oil = pd.read_csv('oil.csv')
@@ -148,12 +146,5 @@ class Preprocessor():
         X_2["day"] = X_2.index.day 
         X_2 = X_2.join(self.holidays_test, on='date').fillna(0.0)
         return  X_1, X_2
-
-
-# if __name__ == '__main__':
-#     preprocessor = Preprocessor()
-#     preprocessor.generate_dataset()
-#     y_train, y_valid, X1_train, X1_valid, X2_train, X2_valid = preprocessor.generate_training_data('2017','2017')
-#     print(y_train.head())
     
 
