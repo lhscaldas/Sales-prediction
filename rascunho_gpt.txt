@@ -1,22 +1,87 @@
-import pandas as pd
-import seaborn as sns
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from scipy.signal import periodogram
-from statsmodels.graphics.tsaplots import plot_pacf
-from statsmodels.tsa.stattools import pacf
-from statsmodels.tsa.deterministic import DeterministicProcess, CalendarFourier
-from datetime import date, datetime, timedelta
-import time
-import calendar
+Um desafio de mineração de dados consiste em treinar um algoritmo de aprendizado de máquina para prever vendas de produtos. Para isso, foram fornecidos diversos dados no formato csv. Segue abaixo as 10 primeiras linhas de cada csv disponível.
 
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mean_squared_log_error, mean_squared_error
-from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from xgboost import XGBRegressor
+train.csv
+id,date,store_nbr,family,sales,onpromotion
+0,2013-01-01,1,AUTOMOTIVE,0.0,0
+1,2013-01-01,1,BABY CARE,0.0,0
+2,2013-01-01,1,BEAUTY,0.0,0
+3,2013-01-01,1,BEVERAGES,0.0,0
+4,2013-01-01,1,BOOKS,0.0,0
+5,2013-01-01,1,BREAD/BAKERY,0.0,0
+6,2013-01-01,1,CELEBRATION,0.0,0
+7,2013-01-01,1,CLEANING,0.0,0
+8,2013-01-01,1,DAIRY,0.0,0
+9,2013-01-01,1,DELI,0.0,0
+10,2013-01-01,1,EGGS,0.0,0
 
+test.csv
+id,date,store_nbr,family,onpromotion
+3000888,2017-08-16,1,AUTOMOTIVE,0
+3000889,2017-08-16,1,BABY CARE,0
+3000890,2017-08-16,1,BEAUTY,2
+3000891,2017-08-16,1,BEVERAGES,20
+3000892,2017-08-16,1,BOOKS,0
+3000893,2017-08-16,1,BREAD/BAKERY,12
+3000894,2017-08-16,1,CELEBRATION,0
+3000895,2017-08-16,1,CLEANING,25
+3000896,2017-08-16,1,DAIRY,45
+3000897,2017-08-16,1,DELI,18
 
+holidays_events.csv
+date,type,locale,locale_name,description,transferred
+2012-03-02,Holiday,Local,Manta,Fundacion de Manta,False
+2012-04-01,Holiday,Regional,Cotopaxi,Provincializacion de Cotopaxi,False
+2012-04-12,Holiday,Local,Cuenca,Fundacion de Cuenca,False
+2012-04-14,Holiday,Local,Libertad,Cantonizacion de Libertad,False
+2012-04-21,Holiday,Local,Riobamba,Cantonizacion de Riobamba,False
+2012-05-12,Holiday,Local,Puyo,Cantonizacion del Puyo,False
+2012-06-23,Holiday,Local,Guaranda,Cantonizacion de Guaranda,False
+2012-06-25,Holiday,Regional,Imbabura,Provincializacion de Imbabura,False
+
+oil.csv
+date,dcoilwtico
+2013-01-01,
+2013-01-02,93.14
+2013-01-03,92.97
+2013-01-04,93.12
+2013-01-07,93.2
+2013-01-08,93.21
+2013-01-09,93.08
+2013-01-10,93.81
+2013-01-11,93.6
+2013-01-14,94.27
+
+transactions.csv
+date,store_nbr,transactions
+2013-01-01,25,770
+2013-01-02,1,2111
+2013-01-02,2,2358
+2013-01-02,3,3487
+2013-01-02,4,1922
+2013-01-02,5,1903
+2013-01-02,6,2143
+2013-01-02,7,1874
+2013-01-02,8,3250
+2013-01-02,9,2940
+
+sample_submission.csv
+id,sales
+3000888,0.0
+3000889,0.0
+3000890,0.0
+3000891,0.0
+3000892,0.0
+3000893,0.0
+3000894,0.0
+3000895,0.0
+3000896,0.0
+3000897,0.0
+
+o algoritmo deve ser treinado usando o train.csv (usando o holiday_events.csv, oil.csv e transactions.csv para gerar features extras) e depois fazer as previsões para o test.csv (usando o holiday_events.csv, oil.csv e transactions.csv). O resuldo das previsões deve estar no formato previsto pelo sample_submission.csv.
+
+Escreva um código em python que consiga realizar essa tarefa.
+
+As duas classes abaixo foram criadas para pre-processar os dados e depois fazer as previsões. Avalie elas e encontre possíveis fontes de erro e melhoreias que podem ser feitas.
 
 class Preprocessor():
     def __init__(self):
@@ -172,40 +237,86 @@ class Preprocessor():
         return  X1, X2
 
 
-if __name__ == '__main__':
-    preprocessor = Preprocessor()
-    preprocessor.generate_dataset()
-    y, X1, X2 = preprocessor.generate_training_data()
-    y_train, y_valid = preprocessor.date_split(y, "2017-07-01")
-    X1_train, X1_valid = preprocessor.date_split(X1, "2017-07-01")
-    X2_train, X2_valid = preprocessor.date_split(X2, "2017-07-01")
+class BoostedHybrid:
+    def __init__(self, model_1=Ridge(), model_2=XGBRegressor()):
+        self.model_1 = model_1
+        self.model_2 = model_2
+        self.y_columns = None
+        self.y_fit = None
+        self.y_resid = None
 
-    X = preprocessor.train.drop('sales', axis=1)
-    X = X.set_index('date')
-    X.index = pd.to_datetime(X.index)
-    y = preprocessor.train[['date','sales']]
-    y = y.set_index('date')
-    y.index = pd.to_datetime(y.index)
-    y = np.log(y + 1)
-    y_train, y_valid = preprocessor.date_split(y, "2017-07-01")
-    X_train, X_valid = preprocessor.date_split(X, "2017-07-01")
-    # xgb_params = {
-    #     'objective': 'reg:squarederror', 
-    #     'eval_metric': 'rmse', 
-    #     'learning_rate': 0.01,
-    #     'subsample': 0.99,
-    #     'colsample_bytree': 0.80,
-    #     'reg_alpha': 10.0,
-    #     'reg_lambda': 0.18,
-    #     'min_child_weight': 47,
-    # }
-    xgb_params = {
-        'n_estimators': 100,
-        'max_depth': 3,
-        'learning_rate': 0.01,
-    }
-    model = XGBRegressor(**xgb_params)
-    model.fit(X_train,y_train)
-    y_pred = model.predict(X_valid)
-    erro_val = np.sqrt(mean_squared_error(y_valid,y_pred))
-    print(erro_val)
+    def fit(self, X_1, X_2, y):
+        self.model_1.fit(X_1, y)
+
+        y_fit = pd.DataFrame(
+            self.model_1.predict(X_1), 
+            index=X_1.index, columns=y.columns,
+        )
+        y_resid = y.subtract(y_fit, axis='columns', fill_value=0)
+        y_resid = y_resid.stack().squeeze()
+        X_2 = X_2.drop(['date'], axis=1)
+        self.model_2.fit(X_2, y_resid.values)
+        self.y_columns = y.columns
+        self.y_fit = y_fit
+        self.y_resid = y_resid
+
+    def predict(self, X_1, X_2):
+        y_pred = pd.DataFrame(
+            self.model_1.predict(X_1),
+            index=X_1.index, columns=self.y_columns,
+        )
+        y_pred = y_pred.stack().squeeze()
+        X_2 = X_2.drop(['date'], axis=1)
+        y_pred += self.model_2.predict(X_2)
+        return y_pred.unstack()
+    
+    def validation_results(self, y_train, y_valid, y_fit, y_pred, verbose=True, plot=True):
+            y_fit = y_fit.clip(0.0)
+            y_pred = y_pred.clip(0.0)
+            error_train = np.sqrt(mean_squared_log_error(y_train, y_fit))
+            error_valid = np.sqrt(mean_squared_log_error(y_valid, y_pred))
+            if verbose:
+                print(f"erro de treinamento: {error_train}")
+                print(f"erro de validação: {error_valid}")
+            if plot:
+                y = pd.concat([y_train, y_valid], axis=0)
+                families = y.columns[0:6]
+                axs = y.loc(axis=1)[families].plot(
+                    subplots=True, figsize=(11, 9), marker='.', linestyle='-',
+                    color='0.25', label='vendas', linewidth=1, markersize=4, alpha=0.5)
+                _ = y_fit.loc(axis=1)[families].plot(subplots=True, color='C0', ax=axs)
+                _ = y_pred.loc(axis=1)[families].plot(subplots=True, color='C3', ax=axs)
+                for ax, family in zip(axs, families):
+                    ax.legend([])
+                    ax.set_ylabel(family)
+                plt.show()
+            return error_train, error_valid
+    
+    def generate_csv(self, y_test):
+        y_test = y_test.reset_index(drop=False)
+        y_test = y_test.rename(columns={'index': 'date'})
+        y_test['date'] = y_test['date'].astype(str)
+        unpivoted = (y_test
+                        .melt(id_vars='date', var_name='item', value_name='sales')
+                        )
+        unpivoted[['store_nbr', 'family']] = unpivoted['item'].str.extract(r'S(\d+)_(.+)')
+        unpivoted = (unpivoted
+            .dropna()
+            .drop(['item'], axis=1)
+        )
+        output = pd.read_csv(
+                    'test.csv',
+                    usecols=['id','store_nbr', 'family', 'date', 'onpromotion'],
+                    dtype={
+                        'store_nbr': 'category',
+                        'family': 'category',
+                        'onpromotion': 'uint32',
+                    },
+                    parse_dates=['date'],
+                )
+        output['date'] = output['date'].astype(str)
+        output = output.merge(unpivoted, on=['date', 'store_nbr', 'family'], how='left', suffixes=('', '_unpivoted'))
+        output = output.drop(['date', 'store_nbr', 'family','onpromotion'], axis=1)
+        output.to_csv('submission.csv',index=False)
+
+

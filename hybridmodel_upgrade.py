@@ -17,16 +17,17 @@ class BoostedHybrid:
         self.y_fit = None
         self.y_resid = None
 
-    def fit(self, X_1, X_2, y1, y2):
-        self.model_1.fit(X_1, y1)
+    def fit(self, X_1, X_2, y):
+        self.model_1.fit(X_1, y)
 
         y_fit = pd.DataFrame(
             self.model_1.predict(X_1), 
-            index=X_1.index, columns=y1.columns,
+            index=X_1.index, columns=y.columns,
         )
-        y_resid = y1.subtract(y_fit, axis='columns', fill_value=0)
+        y_resid = y.subtract(y_fit, axis='columns', fill_value=0)
         y_resid = y_resid.stack().squeeze()
-        self.model_2.fit(X_2, y_resid)
+        X_2 = X_2.drop(['date'], axis=1)
+        self.model_2.fit(X_2, y_resid.values)
         self.y_columns = y.columns
         self.y_fit = y_fit
         self.y_resid = y_resid
@@ -37,6 +38,7 @@ class BoostedHybrid:
             index=X_1.index, columns=self.y_columns,
         )
         y_pred = y_pred.stack().squeeze()
+        X_2 = X_2.drop(['date'], axis=1)
         y_pred += self.model_2.predict(X_2)
         return y_pred.unstack()
     
@@ -91,23 +93,35 @@ class BoostedHybrid:
 
 
 if __name__ == '__main__':
+    # Pré-processamento
     preprocessor = Preprocessor()
     preprocessor.generate_dataset()
-    y1, y2, X1, X2 = preprocessor.generate_training_data()
-    y1_train, y1_valid = preprocessor.date_split(y1, "2017-07-01")
-    y2_train, y2_valid = preprocessor.date_split(y1, "2017-07-01")
+    y, X1, X2 = preprocessor.generate_training_data()
+    y_train, y_valid = preprocessor.date_split(y, "2017-07-01")
     X1_train, X1_valid = preprocessor.date_split(X1, "2017-07-01")
     X2_train, X2_valid = preprocessor.date_split(X2, "2017-07-01")
-
+    # Modelo
+    xgb_params = {
+        'objective': 'reg:squarederror', 
+        'eval_metric': 'rmse', 
+        'learning_rate': 0.01,
+        'subsample': 0.99,
+        'colsample_bytree': 0.80,
+        'reg_alpha': 10.0,
+        'reg_lambda': 0.18,
+        'min_child_weight': 47,
+    }
     model = BoostedHybrid(
                         model_1=LinearRegression(),
-                        model_2=XGBRegressor(
-                            n_estimators=100,
-                            learning_rate=0.01,
-                            max_depth=3,
-                        )
+                        model_2=XGBRegressor(**xgb_params)
                     )
-    model.fit(X1_train, X2_train, y1_train, y2_train)
-    # y_fit = model.predict(X1_train, X2_train)
-    # y_pred = model.predict(X1_valid, X2_valid)
-    # model.validation_results(y_train, y_valid, y_fit, y_pred)
+    model.fit(X1_train, X2_train, y_train)
+    y_fit = model.predict(X1_train, X2_train)
+    # Validação
+    y_pred = model.predict(X1_valid, X2_valid)
+    model.validation_results(y_train, y_valid, y_fit, y_pred)
+    # Teste
+    model.fit(X1, X2, y)
+    X1_test, X2_test = preprocessor.generate_test_data()
+    y_test = model.predict(X1_test, X2_test)
+    model.generate_csv(y_test)

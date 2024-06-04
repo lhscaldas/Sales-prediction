@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from preprocessor import Preprocessor
+from preprocessor_mod import Preprocessor
 
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from xgboost import XGBRegressor
@@ -63,7 +63,6 @@ class BoostedHybrid:
     def generate_csv(self, y_test):
         y_test = y_test.reset_index(drop=False)
         y_test = y_test.rename(columns={'index': 'date'})
-        print(y_test.columns)
         y_test['date'] = y_test['date'].astype(str)
         unpivoted = (y_test
                         .melt(id_vars='date', var_name='item', value_name='sales')
@@ -146,8 +145,26 @@ def validate():
     y_pred = model.predict(X1_valid, X2_valid)
     model.validation_results(y_train, y_valid, y_fit, y_pred)
 
+def test():
+
+    preprocessor = Preprocessor()
+    preprocessor.generate_dataset()
+    y, X1, X2 = preprocessor.generate_training_data('2017','2017')
+    model = BoostedHybrid(
+                        model_1=LinearRegression(),
+                        model_2=XGBRegressor(
+                            n_estimators=100,
+                            learning_rate=0.01,
+                            max_depth=3,
+                        )
+                    )
+    model.fit(X1, X2, y)
+    X1_test, X2_test = preprocessor.generate_test_data('2017','2017')
+    y_test = model.predict(X1_test, X2_test)
+    model.generate_csv(y_test)
+
 if __name__ == '__main__':
-    validate()
+    test()
     
 
 
