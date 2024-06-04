@@ -234,20 +234,16 @@ class EDA:
 
 
 
-# # if __name__ == '__main__':
-#     eda = EDA('train.csv')
-#     eda.initial_exploitation()
-#     eda.all_families_analysis()
+if __name__ == '__main__':
+    eda = EDA('train.csv')
+    eda.initial_exploitation()
+    eda.all_families_analysis()
 
-    # eda = EDA('train.csv', initial = '2016-08-15')
-    # eda.all_families_deseason('A', 26)
-    # eda.all_families_lag(freq='M', order=4, max_lag=8)
+    eda = EDA('train.csv', initial = '2017-01-01')
+    eda.all_families_deseason('A', 26)
+    eda.all_families_lag(freq='M', order=4, max_lag=8)
 
-    # familia = 'SCHOOL AND OFFICE SUPPLIES'
-    # eda = EDA('train.csv', initial = '2017-01-01')
-    # eda.family_analysis(familia)
-    # eda.family_deseason(familia, freq='M', order = 4)
-    # eda.family_lag(familia, freq='M', order=4, max_lag=8)
+
 
 
 

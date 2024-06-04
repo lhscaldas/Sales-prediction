@@ -14,9 +14,6 @@ from sklearn.preprocessing import LabelEncoder
 
 class Preprocessor():
     def __init__(self):
-        # self.oil = pd.read_csv('oil.csv')
-        # self.stores = pd.read_csv('stores.csv')
-        # self.transactions = pd.read_csv('transactions.csv')
 
         self.train = None
         self.holiday_train = None
